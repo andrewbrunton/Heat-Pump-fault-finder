@@ -2,185 +2,204 @@ import streamlit as st
 
 # Page configuration
 st.set_page_config(
-    page_title="Heat Pump Field Diagnostic Assistant",
+    page_title="Heat Pump Diagnostic Tool",
     page_icon="🔧",
     layout="centered",
 )
 
-# Application Header
-st.title("Heat Pump Diagnostic Assistant")
+st.title("🔧 Heat Pump Diagnostic Tool")
 st.markdown(
-    "Field-side troubleshooting tool for heating engineers and technicians."
-)
-st.markdown("---")
-
-# 1. Make and Model Selection Database
-heat_pump_database = {
-    "Samsung": {
-        "models": [
-            "Samsung EHS Mono Gen6 (R32)",
-            "Samsung EHS Split",
-            "Samsung EHS TDM Plus",
-        ],
-        "common_errors": [
-            "E199 / E153 (Flow Rate / Circulation Error)",
-            "E425 / E458 (Fan Motor / Communication Fault)",
-            "E202 (Indoor/Outdoor Unit Communication Loss)",
-            "Low COP / High Electrical Consumption",
-        ],
-    },
-    "Mitsubishi Electric": {
-        "models": [
-            "Mitsubishi Ecodan FTC5 (Monobloc/Split)",
-            "Mitsubishi Ecodan FTC6 (Monobloc/Split)",
-        ],
-        "common_errors": [
-            "Error Code P8 / E6 (Sensor / Communication Fault)",
-            "Error Code U4 / U5 (Phase / Power Supply Fault)",
-            "Rapid Cycling / Short Run Times",
-            "Inadequate Domestic Hot Water Recovery",
-        ],
-    },
-    "Vaillant": {
-        "models": [
-            "Vaillant aroTHERM Plus (R290)",
-            "Vaillant aroTHERM Split",
-        ],
-        "common_errors": [
-            "F.32 / F.73 (Flow Sensor / Pressure Sensor Fault)",
-            "F.530 (Low Glycol / Flow Deficit)",
-            "Compressor Lockout / High Discharge Temp",
-        ],
-    },
-}
-
-# Sidebar Selection
-st.sidebar.header("1. System Identification")
-selected_manufacturer = st.sidebar.selectbox(
-    "Select Manufacturer", list(heat_pump_database.keys())
-)
-selected_model = st.sidebar.selectbox(
-    "Select Model Series", heat_pump_database[selected_manufacturer]["models"]
-)
-selected_fault = st.sidebar.selectbox(
-    "Select Primary Symptom / Error Code",
-    heat_pump_database[selected_manufacturer]["common_errors"],
+    "Please complete the initial details below to begin the sequential diagnostic process."
 )
 
-st.sidebar.markdown("---")
-st.sidebar.info(
-    f"**Active Profile:** {selected_manufacturer} - {selected_model}"
+# --- SECTION 1: Customer & System Details ---
+st.header("1. Customer & System Information")
+
+col1, col2 = st.columns(2)
+with col1:
+    customer_name = st.text_input("Customer Name")
+    postcode = st.text_input("Postcode")
+address = st.text_area("Address")
+
+col3, col4 = st.columns(2)
+with col3:
+    hp_make = st.text_input("Heat Pump Make (e.g., Samsung, Daikin, Mitsubishi)")
+with col4:
+    hp_model = st.text_input("Heat Pump Model (e.g., EHS Mono Gen6)")
+
+hp_kw = st.number_input(
+    "Heat Pump Size (kW)", min_value=1.0, max_value=50.0, step=0.5, value=8.0
 )
 
-# Main Diagnostic Interface
-st.subheader(f"Diagnostic Workflow: {selected_fault}")
+st.divider()
+
+# --- SECTION 2: Reported Issues (Multi-Select) ---
+st.header("2. Reported Issues")
 st.markdown(
-    "Work through the key checks below. Expand the **Guidance & How-To** section for step-by-step testing instructions and expected field benchmarks."
+    "Select all symptoms or fault codes reported by the customer or controller:"
 )
 
-# Diagnostic Steps with Integrated Guidance
-tabs = st.tabs(
-    ["1. Flow & Hydraulics", "2. Sensors & Electronics", "3. System Settings"]
+issue_options = [
+    "E199 / E153 (Flow Rate / Circulation Error)",
+    "Low Delta T at full load",
+    "Compressor failing to start / Inverter Fault",
+    "Frequent defrost cycles / Ice buildup",
+    "Communication error between indoor and outdoor unit",
+    "Other / Custom Issue",
+]
+
+selected_issues = st.multiselect("Active Faults / Symptoms", issue_options)
+
+custom_issue = ""
+if "Other / Custom Issue" in selected_issues:
+    custom_issue = st.text_input(
+        "Please describe the custom issue reported by the customer:"
+    )
+
+st.divider()
+
+# --- SECTION 3: Sequential Diagnostic Questionnaire ---
+st.header("3. Sequential Diagnostic Questionnaire")
+st.markdown(
+    "Work through the relevant active phases below in sequence to isolate root causes."
 )
 
-with tabs[0]:
-    st.markdown("### Volumetric Flow & Delta T Verification")
+# Track answers across sections
+e_q1, e_q2 = "Select", "Select"
+h_q1, h_q2, h_q3 = "Select", "Select", "Select"
+c_q1, c_q2 = "Select", "Select"
 
-    col1, col2 = st.columns(2)
-    with col1:
-        flow_status = st.radio(
-            "Is flow rate within manufacturer specification?",
-            ["Unknown / Not Tested", "Yes, verified stable", "No / Flow error active"],
-            key="flow_check",
-        )
-    with col2:
-        delta_t_val = st.number_input(
-            "Measured Primary Delta T (°C) at full load:",
-            min_value=0.0,
-            max_value=20.0,
-            value=5.0,
-            step=0.5,
-        )
+# Determine which sequence blocks to display based on selected issues
+has_electrical = any(
+    "Compressor" in issue or "Communication" in issue for issue in selected_issues
+)
+has_hydraulic = any(
+    "Flow Rate" in issue or "Low Delta T" in issue or "Defrost" in issue
+    for issue in selected_issues
+)
 
-    # Contextual Guidance Expander
-    with st.expander("📖 Guidance: How to test Flow Rate and Delta T"):
-        st.markdown("""
-        * **Tools Required:** Calibrated twin-probe digital contact thermometer with thermal paste/insulation wrap, and differential pressure manometer if checking pump head.
-        * **Procedure:**
-          1. Force the unit into continuous space-heating mode at full design capacity.
-          2. Attach sensors directly to the main primary flow and return pipes close to the unit, stripping away old pipe insulation at the contact point.
-          3. Wrap probes securely with thermal insulation tape to prevent ambient air cooling interference.
-          4. Allow readings to stabilise for 3 to 5 minutes before noting the differential.
-        * **Field Benchmarks:** 
-          * **Delta T > 8°C to 10°C:** Indicates restricted flow, blocked Y-strainer mesh, or severe hydronic resistance.
-          * **Delta T < 3°C:** Indicates excessive pump speed, volumetric short-circuiting, or hydraulic bypass issues.
-        """)
-
-    if delta_t_val > 8.0:
-        st.warning(
-            "⚠️ High Delta T detected. Inspect primary Y-strainer, check for trapped air in the plate heat exchanger, and verify circulator pump duty settings."
-        )
-    elif delta_t_val < 3.0 and delta_t_val > 0:
-        st.info(
-            "ℹ️ Low Delta T detected. Check for hydraulic short-circuiting across a buffer vessel or low-loss header."
-        )
-
-with tabs[1]:
-    st.markdown("### Sensor Calibration & Resistance Check")
-
-    sensor_checked = st.checkbox(
-        "I have checked flow and return thermistor resistance values against manufacturer tables."
+# --- Phase 1: Electrical & Safety Checks (Always first if electrical/comm selected, or general fallback) ---
+if has_electrical or not selected_issues:
+    st.markdown("### Phase 1: Electrical & Power Diagnostics")
+    st.image(
+        "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=600&auto=format&fit=crop&q=80",
+        caption="Step 1: Electrical Safety & Supply",
+        width=300,
     )
-
-    with st.expander("📖 Guidance: How to check NTC Thermistors"):
-        st.markdown("""
-        * **Tools Required:** Digital multimeter set to ohms (Ω).
-        * **Procedure:**
-          1. Isolate all electrical power to the heat pump completely.
-          2. Disconnect the sensor plug from the main controller board.
-          3. Measure resistance across the sensor terminals.
-          4. Measure current water or ambient temperature using a digital probe.
-          5. Cross-reference your ohm reading against the manufacturer's NTC resistance temperature chart.
-        * **Field Benchmarks:** A drifting sensor (e.g., showing 10°C when pipe is at 35°C) will cause premature cycling or incorrect modulation. Replace any thermistor showing erratic resistance swings.
-        """)
-
-with tabs[2]:
-    st.markdown("### Controller Configuration & Weather Compensation")
-
-    curve_status = st.selectbox(
-        "Weather compensation curve setting:",
-        [
-            "Select status...",
-            "Correctly mapped to building heat loss",
-            "Too aggressive (high flow temps at moderate outdoor temps)",
-            "Unaligned / Factory default",
-        ],
+    e_q1 = st.radio(
+        "1.1 Is there a stable mains voltage supply at the outdoor unit terminals?",
+        ("Select", "Yes", "No"),
+        key="eq1",
     )
-
-    with st.expander("📖 Guidance: How to configure Weather Compensation"):
-        st.markdown("""
-        * **Procedure:**
-          1. Check design outdoor temperature for your geographic region (e.g., -4°C to -6°C for many UK locations).
-          2. Verify that maximum design flow temperature aligns with emitter sizing (e.g., strictly capped at 50°C to 55°C for heat pump compatibility).
-          3. Ensure parallel shift is adjusted so the property maintains comfort without over-shooting during mild shoulder seasons.
-        """)
-
-st.markdown("---")
-
-# Summary & Remediation Action Plan Generator
-st.subheader("💡 Recommended Remediation Action Plan")
-
-if st.button("Generate Final Diagnostic Summary"):
-    st.success("Analysis complete based on technician inputs:")
-    st.markdown(f"""
-    * **Target System:** {selected_manufacturer} - {selected_model}
-    * **Reported Issue:** {selected_fault}
-    * **Actionable Next Steps:**
-      1. Inspect the primary circuit Y-strainer and magnetic filter for particulate accumulation.
-      2. Verify that minimum system water volume thresholds are met (check buffer vessel integration).
-      3. Confirm that circulator pump residual head matches system hydraulic resistance curves.
-    """)
-else:
-    st.info(
-        "Complete the diagnostic tabs above and click the button to compile the custom action plan."
+    e_q2 = st.radio(
+        "1.2 Are communication wiring and inverter fuses intact and secure?",
+        ("Select", "Yes", "No"),
+        key="eq2",
     )
+    st.divider()
+
+# --- Phase 2: Hydraulic & Flow Checks ---
+if has_hydraulic or not selected_issues:
+    st.markdown("### Phase 2: Hydraulic & Circulation Diagnostics")
+    st.image(
+        "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=600&auto=format&fit=crop&q=80",
+        caption="Step 2: Hydronic Balancing & Flow",
+        width=300,
+    )
+    h_q1 = st.radio(
+        "2.1 Are all system isolation and lockshield valves fully open?",
+        ("Select", "Yes", "No"),
+        key="hq1",
+    )
+    h_q2 = st.radio(
+        "2.2 Is the primary magnetic inline filter/strainer clear of debris?",
+        ("Select", "Yes", "No"),
+        key="hq2",
+    )
+    h_q3 = st.radio(
+        "2.3 Is system pressure stable (1.0 - 1.5 bar) and free of trapped air?",
+        ("Select", "Yes", "No"),
+        key="hq3",
+    )
+    st.divider()
+
+# --- Phase 3: General System & Controller Checks ---
+st.markdown("### Phase 3: Controller & Operational Reset")
+st.image(
+    "https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80",
+    caption="Step 3: System State & Hard Reboot",
+    width=300,
+)
+c_q1 = st.radio(
+    "3.1 Is the controller displaying active hard lockout logs?",
+    ("Select", "Yes", "No"),
+    key="cq1",
+)
+c_q2 = st.radio(
+    "3.2 Have you performed a complete hard power cycle (reboot) of the system?",
+    ("Select", "Yes", "No"),
+    key="cq2",
+)
+
+st.divider()
+
+# --- SECTION 4: Remediation Plan Generation ---
+if st.button("Generate Final Diagnostic Summary", type="primary"):
+    if not customer_name or not hp_make or not selected_issues:
+        st.error(
+            "Please ensure Customer Name, Heat Pump Make, and at least one Reported Issue are provided."
+        )
+    else:
+        st.success("Sequential analysis complete based on technician inputs:")
+
+        st.subheader("Job Summary")
+        st.markdown(f"**Customer:** {customer_name}")
+        st.markdown(f"**Address:** {address if address else 'N/A'}, {postcode}")
+        st.markdown(
+            f"**Target System:** {hp_make} - {hp_model} ({hp_kw} kW)"
+        )
+        st.markdown(
+            f"**Reported Issues:** {', '.join(selected_issue for selected_issue in selected_issues)}"
+        )
+        if custom_issue:
+            st.markdown(f"**Custom Details:** {custom_issue}")
+
+        st.subheader("Prioritised Actionable Next Steps:")
+
+        # Phase 1 Remediation
+        if e_q1 == "No":
+            st.warning(
+                "• **[Phase 1] Power Supply:** Check incoming isolator, circuit breakers, and supply voltage at the unit."
+            )
+        if e_q2 == "No":
+            st.warning(
+                "• **[Phase 1] Wiring/Fuses:** Inspect data cable screening, terminal tightness, and inverter board fuses."
+            )
+
+        # Phase 2 Remediation
+        if h_q1 == "No":
+            st.warning(
+                "• **[Phase 2] Isolation Valves:** Open all primary circuit and radiator lockshield valves fully."
+            )
+        if h_q2 == "No":
+            st.warning(
+                "• **[Phase 2] Strainer Maintenance:** Isolate, drain locally, and clean the magnetic filter."
+            )
+        if h_q3 == "No":
+            st.warning(
+                "• **[Phase 2] System Pressure:** Recharge system pressure to target operating limits and bleed air vents."
+            )
+
+        # Phase 3 Remediation
+        if c_q2 == "No":
+            st.warning(
+                "• **[Phase 3] Hard Reset:** Kill mains power for 5 minutes to clear transient controller latches."
+            )
+
+        all_answers = [e_q1, e_q2, h_q1, h_q2, h_q3, c_q1, c_q2]
+        if all(
+            ans in ("Yes", "Select") for ans in all_answers
+        ):  # Adjust if unselected fields remain
+            st.info(
+                "• All sequential checks completed. Escalate to manufacturer technical support if faults persist."
+            )
